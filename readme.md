@@ -4,6 +4,7 @@
 This project is a Streamlit web application developed as a demonstration for a research paper on the automated analysis of Diabetic Foot Ulcer (DFU) images. It implements a multi-stage pipeline utilizing deep learning models for image analysis and a Large Language Model (LLM) for report synthesis.
 
 The tool is designed to assist in the preliminary, objective assessment of DFUs by providing quantitative measurements, visual model explanations, and a summarized report based on both computer vision analysis and patient-reported symptoms.
+
 ---
 # Key Features
 AI Classification: Automatically determines if an uploaded image contains a 'Normal' or 'Abnormal' DFU with a corresponding confidence score.
@@ -23,6 +24,7 @@ Depth Estimation: Uses the MiDaS model to estimate the relative depth of the wou
 Interactive Symptom Input: A user-friendly form to input patient-reported symptoms (e.g., redness, swelling, odor) for a more comprehensive analysis.
 
 LLM-Generated Report: Integrates with the Groq API to generate a clear, easy-to-understand summary based on the combined findings from the image analysis and the symptom questionnaire.
+
 ---
 # Technical Stack and Libraries
 Framework: Streamlit
@@ -42,6 +44,7 @@ Intel-ISL/MiDaS (for depth estimation)
 LLM Integration: groq (for Llama 3.1)
 
 Core Libraries: NumPy, Matplotlib, Albumentations
+
 ---
 
 # Setup and Installation
@@ -94,6 +97,7 @@ Once all dependencies and models are in place, run the Streamlit app from your t
 streamlit run your_app_name.py
 ```
 The application should now be open and running in your local web browser.
+
 ---
 Usage
 Open the App: Launch the application using the command above.
@@ -111,6 +115,7 @@ Answer Questionnaire: If the ulcer is classified as "Abnormal", a symptom form w
 Generate Report: Click the "Generate Final Report" button to send the combined data to the Groq LLM.
 
 Read Summary: The final, comprehensive report will be displayed at the bottom of the page.
+
 ---
 Disclaimer
 This is a research and demonstration tool. It is not a medical device and should not be used for actual diagnosis or to make treatment decisions. The analysis provided is for informational purposes only. Always consult a qualified healthcare professional for any medical concerns or conditions.
