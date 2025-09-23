@@ -1,6 +1,13 @@
 streamlit
 torch
 torchvision
+opencv-python
+numpy
+matplotlib
 timm
+segmentation-models-pytorch
+albumentations
 Pillow
-requests
+lime
+scikit-image
+groq
