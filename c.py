@@ -151,12 +151,27 @@ class DFUAnalyzer:
 
     def _init_midas(self):
         try:
-            self.midas = torch.hub.load("intel-isl/MiDaS", "DPT_Large").to(self.device).eval()
+            # Define the local path to your model
+            MODEL_PATH = "midas_small.pt" # <--- Path to your local model file
+
+            # First, create the model architecture
+            self.midas = torch.hub.load("intel-isl/MiDaS", "MiDaS_small", source='local', path='.')
+        
+            # Then, load the weights from your local file
+            self.midas.load_state_dict(torch.load(MODEL_PATH, map_location=self.device))
+            self.midas.to(self.device).eval()
+
+            # Load the transforms (this part is small and not rate-limited)
             midas_transforms = torch.hub.load("intel-isl/MiDaS", "transforms")
-            self.midas_transform = midas_transforms.dpt_transform
+            self.midas_transform = midas_transforms.small_transform # <-- Use the correct transform
+
+            st.success("MiDaS (Small) loaded successfully from local file.")
+
         except Exception as e:
-            st.warning(f"Could not load MiDaS model: {e}. Depth analysis will be disabled.")
-            self.midas, self.midas_transform, self.use_midas = None, None, False
+            st.warning(f"Could not load local MiDaS model: {e}. Depth analysis will be disabled.")
+            self.midas = None
+            self.midas_transform = None
+            self.use_midas = False
 
     def _infer_depth_midas(self, pil_image):
         if not self.use_midas: return None
@@ -358,12 +373,15 @@ if st.session_state.analysis_results:
 
         col1, col2 = st.columns(2)
         with col1:
-            st.subheader("📏 Measurements")
+            st.subheader(" Measurements")
             if 'measurements' in results:
                 for key, value in results['measurements'].items():
-                    st.metric(label=key, value=f"{value:.2f}")
+                    if isinstance(value, float):
+                        st.metric(label=key, value=f"{value:.2f}")
+                    else:
+                        st.metric(label=key, value=str(value) if value is not None else "N/A")
         with col2:
-            st.subheader("🔬 Depth Analysis (MiDaS)")
+            st.subheader(" Depth Analysis (MiDaS)")
             if 'depth_analysis' in results:
                 for key, value in results['depth_analysis'].items():
                 # Check if the value is a number (float) before formatting
