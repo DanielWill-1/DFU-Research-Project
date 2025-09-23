@@ -366,7 +366,12 @@ if st.session_state.analysis_results:
             st.subheader("🔬 Depth Analysis (MiDaS)")
             if 'depth_analysis' in results:
                 for key, value in results['depth_analysis'].items():
-                    st.metric(label=key, value=f"{value:.4f}" if value is not None else "N/A")
+                # Check if the value is a number (float) before formatting
+                    if isinstance(value, float):
+                        st.metric(label=key, value=f"{value:.4f}")
+                    # Otherwise, just display it as a string (for notes or errors)
+                    else:
+                        st.metric(label=key, value=str(value) if value is not None else "N/A")
 
         st.markdown("---")
         # --- NEW: Symptom Questionnaire and LLM Report Section ---
