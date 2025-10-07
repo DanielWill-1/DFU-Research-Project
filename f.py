@@ -39,7 +39,7 @@ def call_groq_llm(prompt: str, model: str = "llama-3.1-8b-instant") -> str:
 
         chat_completion = client.chat.completions.create(
             messages=[
-                {"role": "system", "content": "You are a helpful medical analysis assistant specializing in DFU."},
+                {"role": "system", "content": "You are a helpful medical analysis assistant specializing in DFU. You must respond in the requested format, such as JSON."},
                 {"role": "user", "content": prompt}
             ],
             model=model,
@@ -51,7 +51,7 @@ def call_groq_llm(prompt: str, model: str = "llama-3.1-8b-instant") -> str:
 
 # ===================================================================
 # Core Classes (GradCAM and DFUAnalyzer)
-# NOTE: These classes remain unchanged from your previous version.
+# NOTE: These classes are unchanged.
 # ===================================================================
 class GradCAM:
     """ Helper class for extracting Grad-CAM heatmaps from a model. """
@@ -297,15 +297,19 @@ def generate_pdf_report(report_content: str, filename: str = "dfu_report.pdf"):
     flowables.append(Paragraph("Diabetic Foot Ulcer Analysis Report", styles['Title']))
     flowables.append(Spacer(1, 12))
     
-    # Add report content
-    for line in report_content.split("\n"):
+    # Add report content, handling markdown for bold
+    for line in report_content.split('\n'):
+        # Replace markdown-style bold (**text**) with proper HTML tags (<b>text</b>)
+        line = line.replace('**', '<b>', 1).replace('**', '</b>', 1)  # Replace only the first pair
         if line.strip():
             flowables.append(Paragraph(line, styles['Normal']))
             flowables.append(Spacer(1, 6))
     
     # Add disclaimer
-    flowables.append(Spacer(1, 12))
-    flowables.append(Paragraph("**Disclaimer:** This is not a medical diagnosis. Please consult a qualified healthcare provider for any medical concerns.", styles['Normal']))
+    flowables.append(Spacer(1, 24))
+    disclaimer_style = styles['Normal']
+    disclaimer_style.textColor = 'red'
+    flowables.append(Paragraph("<b>Disclaimer:</b> This is an AI-generated analysis and not a substitute for professional medical advice, diagnosis, or treatment. Always seek the advice of your physician or other qualified health provider with any questions you may have regarding a medical condition.", disclaimer_style))
     
     doc.build(flowables)
     buffer.seek(0)
@@ -405,10 +409,10 @@ if st.session_state.analysis_results:
             st.subheader("🔬 Depth Analysis (MiDaS)")
             if 'depth_analysis' in results:
                 for key, value in results['depth_analysis'].items():
-                    st.metric(label=key, value=f"{value:.4f}" if value is not None else "N/A")
+                    st.metric(label=key, value=f"{value:.4f}" if isinstance(value, float) else str(value))
 
         st.markdown("---")
-        # --- NEW: Dynamic Symptom Questionnaire using LLM ---
+        # --- Dynamic Symptom Questionnaire using LLM ---
         st.header("📝 Dynamic Symptom Questionnaire for Final Report")
         st.info("The questionnaire is dynamically generated based on the analysis. Please answer the questions below.")
 
@@ -420,82 +424,105 @@ if st.session_state.analysis_results:
                 detection_data['Classification'] = results.get('Classification')
                 detection_summary = "\n".join([f"- {k.replace('_',' ').capitalize()}: {v}" for k, v in detection_data.items() if v is not None])
 
+                # --- START OF MODIFIED SECTION ---
                 question_gen_prompt = f"""
-                You are a medical assistant specializing in Diabetic Foot Ulcers (DFU).
-                Based on the following image analysis results, generate a list of 6-8 relevant questions to ask the user about the patient's symptoms and history.
-                Include a mix of:
-                - Yes/No questions (e.g., "Is there redness?").
-                - Open-ended questions requiring word input (e.g., "Describe the color of the discharge.").
-                - Numerical questions (e.g., "How many days has the symptom persisted?").
+                You are a medical assistant specializing in Diabetic Foot Ulcers (DFU). Your goal is to generate a comprehensive questionnaire.
 
-                Output the questions in JSON format as a list of dictionaries, each with:
-                - "key": unique string identifier (e.g., "redness")
-                - "question": the question text
-                - "type": "yes_no", "text", or "number"
+                **Instructions:**
+                1. Generate a list of 7-8 relevant questions about the patient's symptoms, history, and the ulcer's condition.
+                2. Ensure a good variety of question types: "yes_no", "text", and "number". Aim for at least two of each type.
+                3. Output **only** the questions in a valid JSON format: a list of dictionaries. Each dictionary must have three keys: "key", "question", and "type".
 
-                Image Analysis Summary:
+                **Question Type Examples:**
+                - "yes_no": "Is there any new swelling in the foot or ankle?"
+                - "number": "On a scale of 1-10, how severe is the pain?"
+                - "text": "What color is the drainage from the wound (e.g., clear, yellow, bloody)?"
+
+                **Image Analysis Summary (for context):**
                 {detection_summary}
                 """
+                # --- END OF MODIFIED SECTION ---
 
                 questions_json = call_groq_llm(question_gen_prompt)
                 try:
-                    questions = json.loads(questions_json)
-                    st.session_state.questions = questions
-                except json.JSONDecodeError:
-                    st.error("Failed to generate questions. Using default set.")
-                    # Fallback to default questions
+                    # Clean the response to ensure it's valid JSON
+                    json_start = questions_json.find('[')
+                    json_end = questions_json.rfind(']') + 1
+                    if json_start != -1 and json_end != -1:
+                        clean_json = questions_json[json_start:json_end]
+                        questions = json.loads(clean_json)
+                        st.session_state.questions = questions
+                    else:
+                        raise json.JSONDecodeError("No JSON array found", questions_json, 0)
+                except (json.JSONDecodeError, AttributeError):
+                    st.warning("Failed to generate dynamic questions. Using a more detailed default set.")
+                    # --- START OF MODIFIED SECTION ---
+                    # Fallback to a better, more diverse set of default questions
                     default_questions = [
-                        {"key": "redness", "question": "Is there any unusual redness around the wound?", "type": "yes_no"},
-                        {"key": "swelling", "question": "Do you notice any swelling in the foot or ankle?", "type": "yes_no"},
-                        {"key": "discharge", "question": "Is there any fluid or pus draining from the ulcer?", "type": "yes_no"},
-                        {"key": "odor", "question": "Is there a foul odor coming from the wound?", "type": "yes_no"},
-                        {"key": "pain", "question": "Is the patient experiencing increased pain at the ulcer site?", "type": "yes_no"},
-                        {"key": "warmth", "question": "Does the area around the wound feel warm to the touch?", "type": "yes_no"},
-                        {"key": "duration", "question": "How many days has the ulcer been present?", "type": "number"},
-                        {"key": "description", "question": "Describe any other symptoms.", "type": "text"}
+                        {"key": "pain_level", "question": "On a scale of 1 (no pain) to 10 (severe pain), what is the current pain level?", "type": "number"},
+                        {"key": "duration_days", "question": "For how many days has this ulcer been present?", "type": "number"},
+                        {"key": "foul_odor", "question": "Is there a foul or unusual odor coming from the wound?", "type": "yes_no"},
+                        {"key": "warmth_touch", "question": "Does the area around the wound feel warmer than the surrounding skin?", "type": "yes_no"},
+                        {"key": "discharge_color", "question": "If there is drainage, what color is it (e.g., clear, yellow, green, bloody)?", "type": "text"},
+                        {"key": "sensation_change", "question": "Have there been any changes in sensation, like increased numbness or tingling?", "type": "text"},
+                        {"key": "fever_chills", "question": "Is the patient experiencing general signs of illness, like fever or chills?", "type": "yes_no"},
+                        {"key": "blood_sugar_control", "question": "How have the patient's blood sugar levels been recently (e.g., well-controlled, high, low)?", "type": "text"}
                     ]
                     st.session_state.questions = default_questions
+                    # --- END OF MODIFIED SECTION ---
 
         # Display dynamic questions
         if st.session_state.questions:
             with st.form("dynamic_symptom_form"):
                 for q in st.session_state.questions:
                     key = q['key']
-                    if q['type'] == "yes_no":
-                        st.session_state.user_answers[key] = st.radio(q['question'], ('No', 'Yes'), key=key, horizontal=True)
-                    elif q['type'] == "text":
-                        st.session_state.user_answers[key] = st.text_area(q['question'], key=key)
-                    elif q['type'] == "number":
-                        st.session_state.user_answers[key] = st.number_input(q['question'], min_value=0, step=1, key=key)
+                    question = q['question']
+                    q_type = q['type']
+                    if q_type == "yes_no":
+                        st.radio(question, ('No', 'Yes'), key=key, horizontal=True)
+                    elif q_type == "text":
+                        st.text_area(question, key=key)
+                    elif q_type == "number":
+                        st.number_input(question, min_value=0, step=1, key=key)
                 
+                # Retrieve answers from widgets inside the form
                 submitted = st.form_submit_button("Generate Final Report", use_container_width=True)
+                if submitted:
+                    answers = {}
+                    for q in st.session_state.questions:
+                        answers[q['key']] = st.session_state[q['key']]
+                    st.session_state.user_answers = answers
+
 
             if submitted:
                 with st.spinner("Contacting LLM to generate the report..."):
                     # Prepare prompt for the LLM
-                    symptom_summary = "\n".join([f"- {key.capitalize()}: {val}" for key, val in st.session_state.user_answers.items()])
+                    symptom_summary = "\n".join([f"- {q['question']}: {st.session_state.user_answers.get(q['key'], 'Not answered')}" for q in st.session_state.questions])
                     
                     # Clean up image results for the prompt
                     detection_data = results.get('measurements', {})
                     detection_data.update(results.get('depth_analysis', {}))
                     detection_data['Classification'] = results.get('Classification')
-                    detection_summary = "\n".join([f"- {k.replace('_',' ').capitalize()}: {v}" for k, v in detection_data.items() if v is not None])
+                    detection_summary = "\n".join([f"- {k.replace('_',' ').capitalize()}: {v:.2f}" if isinstance(v, float) else f"- {k.replace('_',' ').capitalize()}: {v}" for k, v in detection_data.items() if v is not None])
 
                     final_prompt = f"""
                     You are a medical analysis assistant specializing in Diabetic Foot Ulcers (DFU).
                     Your task is to provide a clear, easy-to-understand summary based on patient-reported symptoms and a computer vision analysis of a wound image.
+                    Structure your response with markdown headings.
+
                     **DO NOT PROVIDE A DIAGNOSIS.** Instead, explain what the findings might indicate and strongly recommend consulting a healthcare professional.
 
-                    **Patient-Reported Symptoms:**
+                    **Patient-Reported Information:**
                     {symptom_summary}
 
                     **Computer Vision Image Analysis Results:**
                     {detection_summary}
 
                     **Your Task:**
-                    1. Explain what the combined symptoms and image analysis results might mean in simple terms.
-                    2. Interpret the potential severity based on the findings (e.g., mention if signs of infection like warmth, discharge, and odor are present).
-                    3. Clearly and firmly recommend the patient see a doctor or wound care specialist immediately.
+                    1.  **Summary of Findings:** Briefly summarize the key points from both the patient's answers and the image analysis.
+                    2.  **Potential Interpretation:** Explain what the combined findings *might* suggest in simple terms. For example, mention if signs point towards inflammation or potential infection (e.g., warmth, discharge color, odor, fever).
+                    3.  **Recommendations:** Create a clear, bulleted list of actions.
+                    4.  **Urgent Warning:** End with a strong, clear recommendation for the patient to see a doctor or wound care specialist immediately for a formal diagnosis and treatment plan.
                     """
                     
                     llm_report = call_groq_llm(final_prompt)
@@ -506,9 +533,8 @@ if st.session_state.llm_report:
     st.markdown("---")
     st.header("📋 Final Analysis & Recommendations")
     st.markdown(st.session_state.llm_report)
-    st.warning("**Disclaimer:** This is not a medical diagnosis. Please consult a qualified healthcare provider for any medical concerns.")
     
-    # --- NEW: PDF Download Button ---
+    # --- PDF Download Button ---
     pdf_buffer = generate_pdf_report(st.session_state.llm_report)
     st.download_button(
         label="📥 Download Report as PDF",
