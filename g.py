@@ -550,7 +550,7 @@ if st.session_state.llm_report:
         st.session_state.llm_report, 
         image_buffer=st.session_state.analysis_image_buffer
     )
-    st.download_button(S
+    st.download_button(
         label="📥 Download Report as PDF",
         data=pdf_buffer,
         file_name="dfu_analysis_report.pdf",
